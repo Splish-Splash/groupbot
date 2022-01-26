@@ -2,8 +2,22 @@ from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
 from db import Query
+import logging
+from urllib.parse import urljoin
+import os
 from config import TOKEN
+from aiogram.dispatcher.webhook import get_new_configured_app
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from aiohttp import web
+
+TOKEN = os.getenv('TOKEN', '')
+logging.basicConfig(level=logging.INFO)
+WEBHOOK_HOST = f'https://group-query-bot.herokuapp.com'  # name your app
+WEBHOOK_URL_PATH = '/webhook/' + TOKEN
+WEBHOOK_URL = urljoin(WEBHOOK_HOST, WEBHOOK_URL_PATH)
+
+WEBAPP_HOST = '0.0.0.0'
+WEBAPP_PORT = os.environ.get('PORT', 80)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
@@ -23,6 +37,11 @@ with open('history.txt', 'r') as f:
         query = l[i+1].split()
         current_queries.append(Query(' '.join(query[:-25]) + ' ', query[-25:]))
         current_msg.append((cid, mid))
+
+async def on_startup(app):
+    """Simple hook for aiohttp application which manages webhook"""
+    await bot.delete_webhook()
+    await bot.set_webhook(WEBHOOK_URL)
 
 @dp.message_handler(commands=['start'])
 async def process_start_command(message: types.Message):
@@ -97,4 +116,7 @@ def find_query(name):
             return q
 
 if __name__ == '__main__':
-    executor.start_polling(dp)
+    #executor.start_polling(dp)
+    app = get_new_configured_app(dispatcher=dp, path=WEBHOOK_URL_PATH)
+    app.on_startup.append(on_startup)
+    web.run_app(app, host='0.0.0.0', port=os.getenv('PORT'))
